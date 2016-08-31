@@ -42,23 +42,59 @@ import static com.google.common.base.Preconditions.checkNotNull;
 
 public class BSB1Client {
     private static final int MAX_CSV_LINE_LENGTH = 1024;    //Way more than in reality
+    private static final int DEFAULT_PORT = 30003;
 
     private final InetAddress host;
     private final int port;
+    private final MessageProcessor messageProcessor;
 
-    public BSB1Client(@Nonnull String host, @Nonnegative int port) {
-        checkNotNull(host);
-        checkArgument(port > 0 && port <= 65535, "Invalid port. Must be in the (0,65535] range");
-
-        try {
-            this.host = InetAddress.getByName(host);
-        } catch (UnknownHostException e) {
-            throw new IllegalArgumentException("Invalid host '" + host + "'");
-        }
+    private BSB1Client(@Nonnull InetAddress host, @Nonnegative int port, @Nonnull MessageProcessor messageProcessor) {
+        this.host = host;
         this.port = port;
+        this.messageProcessor = messageProcessor;
     }
 
-    public void start(@Nonnull MessageProcessor messageProcessor) {
+    public static class Builder {
+        private InetAddress host;
+        private int port;
+        private MessageProcessor messageProcessor;
+
+        private Builder(@Nonnull MessageProcessor messageProcessor) {
+            this.messageProcessor = checkNotNull(messageProcessor);
+        }
+
+        public Builder host(@Nonnull String host) {
+            checkNotNull(host);
+            try {
+                this.host = InetAddress.getByName(host);
+            } catch (UnknownHostException e) {
+                throw new IllegalArgumentException("Invalid host '" + host + "'");
+            }
+
+            return this;
+        }
+
+        public Builder port(@Nonnegative int port) {
+            checkArgument(port > 0 && port <= 65535, "Invalid port. Must be in the (0,65535] range");
+            this.port = port;
+
+            return this;
+        }
+
+        public BSB1Client get() {
+            return new BSB1Client(
+                    null != host ? host : InetAddress.getLoopbackAddress(),
+                    port != 0 ? port : DEFAULT_PORT,
+                    messageProcessor
+            );
+        }
+    }
+
+    public static Builder processor(@Nonnull MessageProcessor messageProcessor) {
+        return new Builder(messageProcessor);
+    }
+
+    public void start() {
         EventLoopGroup workerGroup = new NioEventLoopGroup();
 
         try {
