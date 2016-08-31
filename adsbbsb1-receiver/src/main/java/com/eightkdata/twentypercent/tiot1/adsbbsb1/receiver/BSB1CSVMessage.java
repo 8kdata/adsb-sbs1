@@ -19,7 +19,35 @@
 package com.eightkdata.twentypercent.tiot1.adsbbsb1.receiver;
 
 
-@FunctionalInterface
-public interface MessageProcessor {
-    void onMessageReceived(BSB1CSVMessage message);
+import javax.annotation.Nonnull;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
+
+import static com.google.common.base.Preconditions.checkArgument;
+
+
+public class BSB1CSVMessage {
+    private static final ZoneId UTC_ZONE_ID = ZoneId.of("UTC");
+
+    private final String csvMessage;
+    private final ZonedDateTime received;
+
+    public BSB1CSVMessage(@Nonnull String csvMessage) {
+        checkArgument(csvMessage != null && ! csvMessage.isEmpty(), "Null or empty csvMessage");
+        this.csvMessage = csvMessage;
+        this.received = ZonedDateTime.now(UTC_ZONE_ID);
+    }
+
+    public String getCSVMessage() {
+        return csvMessage;
+    }
+
+    public ZonedDateTime getReceived() {
+        return received;
+    }
+
+    @Override
+    public String toString() {
+        return received + " " + csvMessage;
+    }
 }

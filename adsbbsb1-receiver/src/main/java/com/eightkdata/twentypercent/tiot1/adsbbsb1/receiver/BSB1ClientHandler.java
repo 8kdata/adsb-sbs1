@@ -37,7 +37,7 @@ public class BSB1ClientHandler extends MessageToMessageDecoder<String> {
 
     @Override
     protected void decode(ChannelHandlerContext channelHandlerContext, String s, List<Object> list) throws Exception {
-        messageProcessor.onMessageReceived(s);
+        messageProcessor.onMessageReceived(new BSB1CSVMessage(s));
     }
 
     @Override

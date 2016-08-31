@@ -39,6 +39,7 @@ import java.net.UnknownHostException;
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 
+
 public class BSB1Client {
     private static final int MAX_CSV_LINE_LENGTH = 1024;    //Way more than in reality
 
