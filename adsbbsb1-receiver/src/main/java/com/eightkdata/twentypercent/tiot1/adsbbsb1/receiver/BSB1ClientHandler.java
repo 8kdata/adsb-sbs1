@@ -29,20 +29,20 @@ import static com.google.common.base.Preconditions.checkNotNull;
 
 
 public class BSB1ClientHandler extends MessageToMessageDecoder<String> {
-    private final MessageProcessor messageProcessor;
+    private final BSB1MessagePublisher publisher;
 
-    public BSB1ClientHandler(@Nonnull MessageProcessor messageProcessor) {
-        this.messageProcessor = checkNotNull(messageProcessor);
+    public BSB1ClientHandler(@Nonnull BSB1MessagePublisher publisher) {
+        this.publisher = checkNotNull(publisher);
     }
 
     @Override
     protected void decode(ChannelHandlerContext channelHandlerContext, String s, List<Object> list) throws Exception {
-        messageProcessor.onMessageReceived(new BSB1CSVMessage(s));
+        publisher.publish(new BSB1CSVMessage(s));
     }
 
     @Override
     public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
-        cause.printStackTrace();
+        publisher.error(cause);
         ctx.close();
     }
 }

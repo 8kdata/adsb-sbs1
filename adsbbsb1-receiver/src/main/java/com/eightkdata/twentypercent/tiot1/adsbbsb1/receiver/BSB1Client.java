@@ -30,6 +30,7 @@ import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.codec.LineBasedFrameDecoder;
 import io.netty.handler.codec.string.StringDecoder;
 import io.netty.util.CharsetUtil;
+import org.reactivestreams.Subscriber;
 
 import javax.annotation.Nonnegative;
 import javax.annotation.Nonnull;
@@ -46,22 +47,20 @@ public class BSB1Client {
 
     private final InetAddress host;
     private final int port;
-    private final MessageProcessor messageProcessor;
+    private final BSB1MessagePublisher messagePublisher;
 
-    private BSB1Client(@Nonnull InetAddress host, @Nonnegative int port, @Nonnull MessageProcessor messageProcessor) {
+    private BSB1Client(@Nonnull InetAddress host, @Nonnegative int port, @Nonnull BSB1MessagePublisher publisher) {
         this.host = host;
         this.port = port;
-        this.messageProcessor = messageProcessor;
+        this.messagePublisher = publisher;
     }
 
     public static class Builder {
         private InetAddress host;
         private int port;
-        private MessageProcessor messageProcessor;
+        private BSB1MessagePublisher messagePublisher = new BSB1MessagePublisher();
 
-        private Builder(@Nonnull MessageProcessor messageProcessor) {
-            this.messageProcessor = checkNotNull(messageProcessor);
-        }
+        private Builder() {}
 
         public Builder host(@Nonnull String host) {
             checkNotNull(host);
@@ -81,17 +80,23 @@ public class BSB1Client {
             return this;
         }
 
+        public Builder subscribe(@Nonnull Subscriber<BSB1CSVMessage> subscriber) {
+            messagePublisher.subscribe(checkNotNull(subscriber));
+
+            return this;
+        }
+
         public BSB1Client get() {
             return new BSB1Client(
                     null != host ? host : InetAddress.getLoopbackAddress(),
                     port != 0 ? port : DEFAULT_PORT,
-                    messageProcessor
+                    messagePublisher
             );
         }
     }
 
-    public static Builder processor(@Nonnull MessageProcessor messageProcessor) {
-        return new Builder(messageProcessor);
+    public static Builder instance() {
+        return new Builder();
     }
 
     public void start() {
@@ -105,9 +110,9 @@ public class BSB1Client {
             b.handler(new ChannelInitializer<SocketChannel>() {
                 @Override
                 public void initChannel(SocketChannel ch) throws Exception {
-                    ch.pipeline().addLast("frameDecoder", new LineBasedFrameDecoder(MAX_CSV_LINE_LENGTH));
-                    ch.pipeline().addLast("stringDecoder", new StringDecoder(CharsetUtil.US_ASCII));
-                    ch.pipeline().addLast(new BSB1ClientHandler(messageProcessor));
+                    ch.pipeline().addLast("Frame Decoder", new LineBasedFrameDecoder(MAX_CSV_LINE_LENGTH));
+                    ch.pipeline().addLast("String Decoder", new StringDecoder(CharsetUtil.US_ASCII));
+                    ch.pipeline().addLast("BSB1 Decoder", new BSB1ClientHandler(messagePublisher));
                 }
             });
 
