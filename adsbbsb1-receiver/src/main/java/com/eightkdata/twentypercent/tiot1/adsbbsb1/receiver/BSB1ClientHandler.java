@@ -21,6 +21,7 @@ package com.eightkdata.twentypercent.tiot1.adsbbsb1.receiver;
 
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.MessageToMessageDecoder;
+import io.reactivex.FlowableEmitter;
 
 import javax.annotation.Nonnull;
 import java.util.List;
@@ -29,20 +30,20 @@ import static com.google.common.base.Preconditions.checkNotNull;
 
 
 public class BSB1ClientHandler extends MessageToMessageDecoder<String> {
-    private final BSB1MessagePublisher publisher;
+    private final FlowableEmitter<BSB1CSVMessage> publisher;
 
-    public BSB1ClientHandler(@Nonnull BSB1MessagePublisher publisher) {
+    public BSB1ClientHandler(@Nonnull FlowableEmitter<BSB1CSVMessage> publisher) {
         this.publisher = checkNotNull(publisher);
     }
 
     @Override
     protected void decode(ChannelHandlerContext channelHandlerContext, String s, List<Object> list) throws Exception {
-        publisher.publish(new BSB1CSVMessage(s));
+        publisher.onNext(new BSB1CSVMessage(s));
     }
 
     @Override
     public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
-        publisher.error(cause);
+        publisher.onError(cause);
         ctx.close();
     }
 }
