@@ -30,7 +30,7 @@ import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.codec.LineBasedFrameDecoder;
 import io.netty.handler.codec.string.StringDecoder;
 import io.netty.util.CharsetUtil;
-import org.reactivestreams.Subscriber;
+import org.reactivestreams.Publisher;
 
 import javax.annotation.Nonnegative;
 import javax.annotation.Nonnull;
@@ -47,18 +47,16 @@ public class BSB1Client {
 
     private final InetAddress host;
     private final int port;
-    private final BSB1MessagePublisher messagePublisher;
+    private final BSB1MessagePublisher messagePublisher = new BSB1MessagePublisher();
 
-    private BSB1Client(@Nonnull InetAddress host, @Nonnegative int port, @Nonnull BSB1MessagePublisher publisher) {
+    private BSB1Client(@Nonnull InetAddress host, @Nonnegative int port) {
         this.host = host;
         this.port = port;
-        this.messagePublisher = publisher;
     }
 
     public static class Builder {
         private InetAddress host;
         private int port;
-        private BSB1MessagePublisher messagePublisher = new BSB1MessagePublisher();
 
         private Builder() {}
 
@@ -80,23 +78,20 @@ public class BSB1Client {
             return this;
         }
 
-        public Builder subscribe(@Nonnull Subscriber<BSB1CSVMessage> subscriber) {
-            messagePublisher.subscribe(checkNotNull(subscriber));
-
-            return this;
-        }
-
         public BSB1Client get() {
             return new BSB1Client(
                     null != host ? host : InetAddress.getLoopbackAddress(),
-                    port != 0 ? port : DEFAULT_PORT,
-                    messagePublisher
+                    port != 0 ? port : DEFAULT_PORT
             );
         }
     }
 
     public static Builder instance() {
         return new Builder();
+    }
+
+    public Publisher<BSB1CSVMessage> publisher() {
+        return messagePublisher;
     }
 
     public void start() {
