@@ -19,9 +19,10 @@
 package com.eightkdata.twentypercent.tiot1.adsbbsb1.receiver;
 
 
+import com.lmax.disruptor.EventTranslatorOneArg;
+import com.lmax.disruptor.RingBuffer;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.MessageToMessageDecoder;
-import io.reactivex.processors.FlowableProcessor;
 
 import javax.annotation.Nonnull;
 import java.util.List;
@@ -30,22 +31,26 @@ import static com.google.common.base.Preconditions.checkNotNull;
 
 
 public class BSB1ClientHandler extends MessageToMessageDecoder<String> {
-    private final FlowableProcessor<BSB1CSVMessage> processor;
+    private final static EventTranslatorOneArg<BSB1CSVMessage, String> EVENT_TRANSLATOR =
+            (message, sequence, str) -> message.setCSVMessage(str);
 
-    public BSB1ClientHandler(@Nonnull FlowableProcessor<BSB1CSVMessage> processor) {
-        this.processor = checkNotNull(processor);
+    private final RingBuffer<BSB1CSVMessage> ringBuffer;
+
+    public BSB1ClientHandler(@Nonnull RingBuffer<BSB1CSVMessage> ringBuffer) {
+        this.ringBuffer = checkNotNull(ringBuffer);
     }
 
     @Override
     protected void decode(ChannelHandlerContext channelHandlerContext, String s, List<Object> list) throws Exception {
-        processor.onNext(new BSB1CSVMessage(s));
+        // Apply backpressure: if buffer is full, message is discarded
+        if (ringBuffer.remainingCapacity() > 0) {
+            ringBuffer.publishEvent(EVENT_TRANSLATOR, s);
+        }
     }
-
-
 
     @Override
     public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
-        processor.onError(cause);
+        // TODO: log cause. Restart client?
         ctx.close();
     }
 }

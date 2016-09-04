@@ -20,6 +20,7 @@ package com.eightkdata.twentypercent.tiot1.adsbbsb1.receiver;
 
 
 import com.eightkdata.twentypercent.tiot1.adsbbsb1.receiver.util.SimpleNamedThreadFactory;
+import com.lmax.disruptor.dsl.Disruptor;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelInitializer;
@@ -48,20 +49,34 @@ public class BSB1Client {
     private static final int MAX_CSV_LINE_LENGTH = 1024;    //Way more than in reality
     private static final int DEFAULT_PORT = 30003;
     private static final int NETTY_THREADS_DEFAULT_NUMBER = 0;  // See MultithreadEventLoopGroup.java
-    private static final String NETTY_THREADS_NAME_PREFIX = "adsbbsb1-receiver";
+    private static final String NETTY_THREADS_NAME_PREFIX = "adsbbsb1-receiver-netty";
+    private static final String DISRUPTOR_THREADS_NAME_PREFIX = "adsbbsb1-receiver-disruptor";
+    private static final short DISRPUTOR_BUFFER_SIZE_POWER_2_EXPONENT = 10;     // = 1024
 
     private final InetAddress host;
     private final int port;
     private final FlowableProcessor<BSB1CSVMessage> processor = PublishProcessor.create();
+    private final Disruptor<BSB1CSVMessage> disruptor;
 
-    private BSB1Client(@Nonnull InetAddress host, @Nonnegative int port) {
+    private BSB1Client(@Nonnull InetAddress host, @Nonnegative int port, @Nonnegative int bufferSize) {
         this.host = host;
         this.port = port;
+
+        disruptor = new Disruptor<>(
+                BSB1CSVMessage::new,
+                bufferSize,
+                new SimpleNamedThreadFactory(DISRUPTOR_THREADS_NAME_PREFIX)
+        );
+        disruptor.handleEventsWith(
+                (message, sequence, endOfBatch) ->  processor.onNext(message)
+        );
+        disruptor.start();
     }
 
     public static class Builder {
         private InetAddress host;
         private int port;
+        private int bufferSize;
 
         private Builder() {}
 
@@ -83,10 +98,21 @@ public class BSB1Client {
             return this;
         }
 
+        public Builder bufferSize(@Nonnegative int bufferSize) {
+            checkArgument(
+                    bufferSize > 0 && (bufferSize & (bufferSize - 1)) == 0,
+                    "Buffer size must be positive and a power of two"
+            );
+            this.bufferSize = bufferSize;
+
+            return this;
+        }
+
         public BSB1Client get() {
             return new BSB1Client(
                     null != host ? host : InetAddress.getLoopbackAddress(),
-                    port != 0 ? port : DEFAULT_PORT
+                    port != 0 ? port : DEFAULT_PORT,
+                    bufferSize != 0 ? bufferSize : 1 << DISRPUTOR_BUFFER_SIZE_POWER_2_EXPONENT
             );
         }
     }
@@ -115,7 +141,7 @@ public class BSB1Client {
                 public void initChannel(SocketChannel ch) throws Exception {
                     ch.pipeline().addLast("Frame Decoder", new LineBasedFrameDecoder(MAX_CSV_LINE_LENGTH));
                     ch.pipeline().addLast("String Decoder", new StringDecoder(CharsetUtil.US_ASCII));
-                    ch.pipeline().addLast("BSB1 Decoder", new BSB1ClientHandler(processor));
+                    ch.pipeline().addLast("BSB1 Decoder", new BSB1ClientHandler(disruptor.getRingBuffer()));
                 }
             });
 

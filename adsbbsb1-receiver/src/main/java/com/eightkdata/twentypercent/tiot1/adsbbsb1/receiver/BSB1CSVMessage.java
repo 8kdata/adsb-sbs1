@@ -29,10 +29,12 @@ import static com.google.common.base.Preconditions.checkArgument;
 public class BSB1CSVMessage {
     private static final ZoneId UTC_ZONE_ID = ZoneId.of("UTC");
 
-    private final String csvMessage;
-    private final ZonedDateTime received;
+    private String csvMessage;
+    private ZonedDateTime received;
 
-    public BSB1CSVMessage(@Nonnull String csvMessage) {
+    public BSB1CSVMessage() {}
+
+    public void setCSVMessage(@Nonnull String csvMessage) {
         checkArgument(csvMessage != null && ! csvMessage.isEmpty(), "Null or empty csvMessage");
         this.csvMessage = csvMessage;
         this.received = ZonedDateTime.now(UTC_ZONE_ID);
