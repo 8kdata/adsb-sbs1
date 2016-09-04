@@ -30,16 +30,14 @@ import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.codec.LineBasedFrameDecoder;
 import io.netty.handler.codec.string.StringDecoder;
 import io.netty.util.CharsetUtil;
-import io.reactivex.Flowable;
-import io.reactivex.FlowableEmitter;
-import io.reactivex.FlowableOnSubscribe;
+import io.reactivex.processors.FlowableProcessor;
+import io.reactivex.processors.PublishProcessor;
 import org.reactivestreams.Publisher;
 
 import javax.annotation.Nonnegative;
 import javax.annotation.Nonnull;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
-import java.util.concurrent.atomic.AtomicReference;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
@@ -51,13 +49,11 @@ public class BSB1Client {
 
     private final InetAddress host;
     private final int port;
-    private final FlowableOnSubscribe<BSB1CSVMessage> publisherCreator;
-    private final AtomicReference<FlowableEmitter<BSB1CSVMessage>> emitterReference = new AtomicReference<>();
+    private final FlowableProcessor<BSB1CSVMessage> processor = PublishProcessor.create();
 
     private BSB1Client(@Nonnull InetAddress host, @Nonnegative int port) {
         this.host = host;
         this.port = port;
-        publisherCreator = e -> emitterReference.set(e);
     }
 
     public static class Builder {
@@ -97,7 +93,7 @@ public class BSB1Client {
     }
 
     public Publisher<BSB1CSVMessage> publisher() {
-        return Flowable.create(publisherCreator, FlowableEmitter.BackpressureMode.LATEST);
+        return processor;
     }
 
     public void start() {
@@ -113,7 +109,7 @@ public class BSB1Client {
                 public void initChannel(SocketChannel ch) throws Exception {
                     ch.pipeline().addLast("Frame Decoder", new LineBasedFrameDecoder(MAX_CSV_LINE_LENGTH));
                     ch.pipeline().addLast("String Decoder", new StringDecoder(CharsetUtil.US_ASCII));
-                    ch.pipeline().addLast("BSB1 Decoder", new BSB1ClientHandler(emitterReference.get()));
+                    ch.pipeline().addLast("BSB1 Decoder", new BSB1ClientHandler(processor));
                 }
             });
 
@@ -126,6 +122,7 @@ public class BSB1Client {
             Thread.currentThread().interrupt();
         } finally {
             workerGroup.shutdownGracefully();
+            processor.onComplete();
         }
     }
 }
