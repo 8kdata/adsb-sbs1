@@ -19,6 +19,7 @@
 package com.eightkdata.twentypercent.tiot1.adsbbsb1.receiver;
 
 
+import com.eightkdata.twentypercent.tiot1.adsbbsb1.receiver.util.SimpleNamedThreadFactory;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelInitializer;
@@ -46,6 +47,8 @@ import static com.google.common.base.Preconditions.checkNotNull;
 public class BSB1Client {
     private static final int MAX_CSV_LINE_LENGTH = 1024;    //Way more than in reality
     private static final int DEFAULT_PORT = 30003;
+    private static final int NETTY_THREADS_DEFAULT_NUMBER = 0;  // See MultithreadEventLoopGroup.java
+    private static final String NETTY_THREADS_NAME_PREFIX = "adsbbsb1-receiver";
 
     private final InetAddress host;
     private final int port;
@@ -97,7 +100,10 @@ public class BSB1Client {
     }
 
     public void start() {
-        EventLoopGroup workerGroup = new NioEventLoopGroup();
+        EventLoopGroup workerGroup = new NioEventLoopGroup(
+                NETTY_THREADS_DEFAULT_NUMBER,
+                new SimpleNamedThreadFactory(NETTY_THREADS_NAME_PREFIX)
+        );
 
         try {
             Bootstrap b = new Bootstrap();
