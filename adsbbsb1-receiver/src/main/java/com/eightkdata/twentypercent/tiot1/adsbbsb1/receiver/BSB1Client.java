@@ -52,6 +52,7 @@ public class BSB1Client {
     private static final String NETTY_THREADS_NAME_PREFIX = "adsbbsb1-receiver-netty";
     private static final String DISRUPTOR_THREADS_NAME_PREFIX = "adsbbsb1-receiver-disruptor";
     private static final short DISRPUTOR_BUFFER_SIZE_POWER_2_EXPONENT = 10;     // = 1024
+    private static final int MAX_SECONDS_BETWEEN_SERVER_RECONNECTS = 10;
 
     private final Logger logger = LoggerFactory.getLogger(BSB1Client.class);
 
@@ -59,6 +60,7 @@ public class BSB1Client {
     private final int port;
     private final FlowableProcessor<BSB1CSVMessage> processor = PublishProcessor.create();
     private final Disruptor<BSB1CSVMessage> disruptor;
+    private boolean connectionSuccessful;
 
     private BSB1Client(@Nonnull InetAddress host, @Nonnegative int port, @Nonnegative int bufferSize) {
         this.host = host;
@@ -130,47 +132,67 @@ public class BSB1Client {
     }
 
     public void start() {
+        while(true) {
+            connectionSuccessful = false;
+            try {
+                connect();
+                if(!connectionSuccessful) {
+                    Thread.sleep((long) (Math.random() * MAX_SECONDS_BETWEEN_SERVER_RECONNECTS * 1000));
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();     // Clear interrupt flag
+                processor.onComplete();
+                logger.info("Client start() method was interrupted. Exiting method");
+                break;
+            }
+        }
+    }
+
+    private void connect() throws InterruptedException {
         EventLoopGroup workerGroup = new NioEventLoopGroup(
                 NETTY_THREADS_DEFAULT_NUMBER,
                 new SimpleNamedThreadFactory(NETTY_THREADS_NAME_PREFIX)
         );
 
-        try {
-            Bootstrap b = new Bootstrap();
-            b.group(workerGroup);
-            b.channel(NioSocketChannel.class);
-            b.option(ChannelOption.SO_KEEPALIVE, true);
-            b.handler(new ChannelInitializer<SocketChannel>() {
-                @Override
-                public void initChannel(SocketChannel ch) throws Exception {
-                    ch.pipeline().addLast("Frame Decoder", new LineBasedFrameDecoder(MAX_CSV_LINE_LENGTH));
-                    ch.pipeline().addLast("String Decoder", new StringDecoder(CharsetUtil.US_ASCII));
-                    ch.pipeline().addLast("BSB1 Decoder", new BSB1ClientHandler(disruptor.getRingBuffer()));
+        Bootstrap bootstrap = new Bootstrap()
+                .group(workerGroup)
+                .channel(NioSocketChannel.class)
+                .option(ChannelOption.SO_KEEPALIVE, true)
+                .handler(new ChannelInitializer<SocketChannel>() {
+                    @Override
+                    public void initChannel(SocketChannel ch) throws Exception {
+                        ch.pipeline().addLast("Frame Decoder", new LineBasedFrameDecoder(MAX_CSV_LINE_LENGTH));
+                        ch.pipeline().addLast("String Decoder", new StringDecoder(CharsetUtil.US_ASCII));
+                        ch.pipeline().addLast("BSB1 Decoder", new BSB1ClientHandler(disruptor.getRingBuffer()));
+                    }
+                })
+        ;
+
+        // Start the client.
+        ChannelFuture channelFuture = bootstrap.connect(host, port);
+        channelFuture.addListener(
+                (ChannelFutureListener) c -> {
+                    if(c.isSuccess()) {
+                        connectionSuccessful = true;
+                        logger.info(
+                                "Connected to server {}:{} from port {}", host, port,
+                                ((InetSocketAddress) c.channel().localAddress()).getPort()
+                        );
+                    } else {
+                        connectionSuccessful = false;
+                        logger.info("Could not connect to server {}:{}", host, port);
+                    }
                 }
-            });
+        );
 
-            // Start the client.
-            ChannelFuture channelFuture = b.connect(host, port);
-
-            channelFuture.addListener(
-                    (ChannelFutureListener) c ->
-                    logger.info(
-                            "Connected to server {}:{} from port {}", host, port,
-                            ((InetSocketAddress) c.channel().localAddress()).getPort()
-                    )
-            );
-
-            channelFuture.sync();
-
-            // Wait until the connection is closed.
+        try {
             channelFuture.channel().closeFuture().sync();
-        } catch (InterruptedException ex) {
-            Thread.currentThread().interrupt();
         } finally {
             workerGroup.shutdownGracefully();
-            processor.onComplete();
 
-            logger.info("Server {}:{} disconnected", host, port);
+            if(connectionSuccessful) {
+                logger.info("Server {}:{} disconnected", host, port);
+            }
         }
     }
 }
