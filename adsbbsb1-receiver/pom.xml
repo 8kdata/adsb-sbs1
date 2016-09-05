@@ -28,6 +28,19 @@
             <artifactId>guava</artifactId>
         </dependency>
         <dependency>
+            <groupId>org.reactivestreams</groupId>
+            <artifactId>reactive-streams</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.reactivex.rxjava2</groupId>
+            <artifactId>rxjava</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+        </dependency>
+
+        <dependency>
             <groupId>io.netty</groupId>
             <artifactId>netty-transport</artifactId>
             <version>${netty.version}</version>
@@ -36,14 +49,6 @@
             <groupId>io.netty</groupId>
             <artifactId>netty-codec</artifactId>
             <version>${netty.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>org.reactivestreams</groupId>
-            <artifactId>reactive-streams</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>io.reactivex.rxjava2</groupId>
-            <artifactId>rxjava</artifactId>
         </dependency>
         <dependency>
             <groupId>com.lmax</groupId>

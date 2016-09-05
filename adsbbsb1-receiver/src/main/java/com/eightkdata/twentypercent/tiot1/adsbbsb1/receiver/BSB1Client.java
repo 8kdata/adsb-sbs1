@@ -22,10 +22,7 @@ package com.eightkdata.twentypercent.tiot1.adsbbsb1.receiver;
 import com.eightkdata.twentypercent.tiot1.adsbbsb1.receiver.util.SimpleNamedThreadFactory;
 import com.lmax.disruptor.dsl.Disruptor;
 import io.netty.bootstrap.Bootstrap;
-import io.netty.channel.ChannelFuture;
-import io.netty.channel.ChannelInitializer;
-import io.netty.channel.ChannelOption;
-import io.netty.channel.EventLoopGroup;
+import io.netty.channel.*;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
@@ -35,10 +32,13 @@ import io.netty.util.CharsetUtil;
 import io.reactivex.processors.FlowableProcessor;
 import io.reactivex.processors.PublishProcessor;
 import org.reactivestreams.Publisher;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nonnegative;
 import javax.annotation.Nonnull;
 import java.net.InetAddress;
+import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
 
 import static com.google.common.base.Preconditions.checkArgument;
@@ -52,6 +52,8 @@ public class BSB1Client {
     private static final String NETTY_THREADS_NAME_PREFIX = "adsbbsb1-receiver-netty";
     private static final String DISRUPTOR_THREADS_NAME_PREFIX = "adsbbsb1-receiver-disruptor";
     private static final short DISRPUTOR_BUFFER_SIZE_POWER_2_EXPONENT = 10;     // = 1024
+
+    private final Logger logger = LoggerFactory.getLogger(BSB1Client.class);
 
     private final InetAddress host;
     private final int port;
@@ -71,6 +73,8 @@ public class BSB1Client {
                 (message, sequence, endOfBatch) ->  processor.onNext(message)
         );
         disruptor.start();
+
+        logger.info("ADS-B BSB-1 receiver client initialized. Server: {}:{}", host, port);
     }
 
     public static class Builder {
@@ -146,15 +150,27 @@ public class BSB1Client {
             });
 
             // Start the client.
-            ChannelFuture f = b.connect(host, port).sync();
+            ChannelFuture channelFuture = b.connect(host, port);
+
+            channelFuture.addListener(
+                    (ChannelFutureListener) c ->
+                    logger.info(
+                            "Connected to server {}:{} from port {}", host, port,
+                            ((InetSocketAddress) c.channel().localAddress()).getPort()
+                    )
+            );
+
+            channelFuture.sync();
 
             // Wait until the connection is closed.
-            f.channel().closeFuture().sync();
+            channelFuture.channel().closeFuture().sync();
         } catch (InterruptedException ex) {
             Thread.currentThread().interrupt();
         } finally {
             workerGroup.shutdownGracefully();
             processor.onComplete();
+
+            logger.info("Server {}:{} disconnected", host, port);
         }
     }
 }

@@ -23,6 +23,8 @@ import com.lmax.disruptor.EventTranslatorOneArg;
 import com.lmax.disruptor.RingBuffer;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.MessageToMessageDecoder;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nonnull;
 import java.util.List;
@@ -33,6 +35,8 @@ import static com.google.common.base.Preconditions.checkNotNull;
 public class BSB1ClientHandler extends MessageToMessageDecoder<String> {
     private final static EventTranslatorOneArg<BSB1CSVMessage, String> EVENT_TRANSLATOR =
             (message, sequence, str) -> message.setCSVMessage(str);
+
+    private final Logger logger = LoggerFactory.getLogger(BSB1ClientHandler.class);
 
     private final RingBuffer<BSB1CSVMessage> ringBuffer;
 
@@ -45,6 +49,8 @@ public class BSB1ClientHandler extends MessageToMessageDecoder<String> {
         // Apply backpressure: if buffer is full, message is discarded
         if (ringBuffer.remainingCapacity() > 0) {
             ringBuffer.publishEvent(EVENT_TRANSLATOR, s);
+        } else {
+            logger.warn("Applying backpressure. Received message dropped, RingBuffer is full");
         }
     }
 
@@ -52,5 +58,6 @@ public class BSB1ClientHandler extends MessageToMessageDecoder<String> {
     public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
         // TODO: log cause. Restart client?
         ctx.close();
+        logger.error("Exception in channel handler", cause);
     }
 }
